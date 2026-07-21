@@ -1,7 +1,7 @@
 (function(){
 const STORAGE_KEY = "hrac_stable_foundation_v1";
 const DEFAULT_YEARS = ["2026","2027","2028"];
-const APP_VERSION = "10.1";
+const APP_VERSION = "10.2";
 let state = loadState();
 let dragId = null;
 let dirty = false;
@@ -1693,6 +1693,12 @@ document.addEventListener("drop", e=>{
 
 function doAction(btn){
   const act=btn.dataset.action, a=selectedArtist();
+  if(act==="upload-education-images"){
+    if(readOnlyMode){ alert("Read-only mode is on. Click Start Editing before uploading images."); return; }
+    const input=document.querySelector(`input[data-education-image-upload="${btn.dataset.id}"][data-education-image-type="${btn.dataset.type}"]`);
+    if(input){ input.click(); } else { alert("The image picker could not be found. Please refresh the page and try again."); }
+    return;
+  }
   const editActions = new Set(["new-artist","add-artist-year","duplicate-selected","delete-selected","copy-reminder","clear-activity-log","toggle-favorite","toggle-pin","add-education-program","edit-education-program","delete-education-program","add-school-tour","edit-school-tour","delete-school-tour","add-education-resource","edit-education-resource","delete-education-resource","new-education-program-profile","new-school-tour-profile","new-resource-profile","duplicate-education-record","delete-selected-education","add-participant","remove-participant","toggle-participant-present","remove-education-image"]);
   if(readOnlyMode && editActions.has(act)){ alert("Read-only mode is on. Click Start Editing from the Collaboration panel before making changes."); return; }
   if(act==="toggle-favorite" && a){ a.favorite=!a.favorite; logActivity(a.favorite?"Favorited artist":"Removed favorite",a.artistName||"Untitled"); markDirty(); render(); showTab(a.year,false); return; }

@@ -1,39 +1,9 @@
-# HRAC Art Center Manager — Version 10.1
-## Attendance, Sign-In & Profile Images
+# HRAC Art Center Manager — Version 10.2
+## Fall 2026 ARTisTRY Import & Image Picker Repair
 
-### Students and guardians
-Program and school-tour profiles now include editable attendance rosters with:
-- Student name
-- Age or grade
-- Guardian name
-- Guardian phone
-- Guardian email
-- Present status
-- Sign-in time
-- Sign-out time
-- Pickup person
+- Repairs the Education & Outreach Add Images button.
+- Includes a companion JSON containing 12 filled Fall 2026 ARTisTRY profiles.
+- The companion JSON embeds 36 example images extracted from the Word planning document.
 
-### Sign-in tools
-- Mark students present directly inside the manager
-- Automatic sign-in time when a student is marked present
-- Editable sign-in and sign-out times
-- Printable landscape sign-in sheet
-- Guardian sign-in signature space
-- Pickup person and pickup signature space
-- Blank rows included for walk-ins
-
-### Profile images
-Programs, school tours, and education resources now support multiple uploaded images.
-Images can document:
-- Project examples
-- Class setup
-- Flyers
-- Student work
-- Outreach events
-- Resource previews
-
-### Data safety
-Participants, attendance information, guardian information, and images are included in the shared JSON backup.
-
-### Installation
-Replace the matching files in the GitHub repository with this release, then hard-refresh using Ctrl + Shift + R.
+Upload this folder to GitHub, replace matching files, and hard-refresh with Ctrl + Shift + R.
+Then import `HRAC_Art_Center_Manager_10.2_Fall_2026_ARTisTRY_FILLED.json`.
