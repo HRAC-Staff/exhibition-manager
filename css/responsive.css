@@ -1,0 +1,43 @@
+${document.querySelector("style").innerHTML}
+
+@media (max-width: 980px){
+  .education-hero{flex-direction:column}
+  .education-hero-actions{justify-content:flex-start;max-width:none}
+  .education-layout{grid-template-columns:1fr}
+  .education-pulse{align-items:flex-start;flex-direction:column}
+}
+@media (max-width: 640px){
+  .education-hero{padding:20px}
+  .education-hero h1{font-size:28px}
+  .education-hero-actions{display:grid;width:100%}
+  .education-hero-actions .manager-btn{width:100%}
+  .tour-grid,.resource-grid{grid-template-columns:1fr}
+}
+
+/* Version 9.1 responsive polish */
+@media (max-width: 1280px){
+  .contact-grid{grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+}
+@media (max-width: 760px){
+  .contact-grid{grid-template-columns:1fr}
+  .contact-copy a{
+    white-space:normal;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
+  .file-row{
+    grid-template-columns:1fr;
+    align-items:start;
+  }
+  .file-actions{
+    justify-content:flex-start;
+  }
+}
+
+@media(max-width:1150px){.ed-category-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){.ed-suite-split,.ed-profile-grid{grid-template-columns:1fr}.ed-card.ed-wide{grid-column:auto}.ed-profile-head{grid-template-columns:1fr}.ed-profile-actions{justify-content:flex-start}.ed-form-grid{grid-template-columns:1fr}.ed-full,.ed-area{grid-column:auto}}
+@media(max-width:700px){.ed-category-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.ed-category-grid{grid-template-columns:1fr}.ed-profile-head{padding:18px}.ed-profile-title h1{font-size:27px}}
+
+@media(max-width:760px){.ed-card-head{flex-direction:column}.ed-card-actions{width:100%}.ed-card-actions .manager-btn{flex:1}.education-image-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.education-image-grid{grid-template-columns:1fr}}
