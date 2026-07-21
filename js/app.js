@@ -1,7 +1,7 @@
 (function(){
 const STORAGE_KEY = "hrac_stable_foundation_v1";
 const DEFAULT_YEARS = ["2026","2027","2028"];
-const APP_VERSION = "10.2";
+const APP_VERSION = "11.0";
 let state = loadState();
 let dragId = null;
 let dirty = false;
@@ -61,6 +61,11 @@ function normalize(s){
   s.salesRecords = Array.isArray(s.salesRecords) ? s.salesRecords : [];
   s.collectionCare = Array.isArray(s.collectionCare) ? s.collectionCare : [];
   s.callsForEntry = Array.isArray(s.callsForEntry) ? s.callsForEntry : [];
+  s.selectedUnifiedId = s.selectedUnifiedId || null;
+  s.selectedUnifiedType = s.selectedUnifiedType || null;
+  s.salesRecords = s.salesRecords.map(r=>({id:uid(),date:"",artist:"",artwork:"",buyer:"",buyerEmail:"",buyerPhone:"",amount:0,status:"Inquiry",deposit:0,balance:0,paymentMethod:"",artistPayout:0,payoutStatus:"Not Ready",shipping:"",invoiceNumber:"",communicationLog:"",timeline:"",notes:"",documents:[],profileImages:[],...r}));
+  s.collectionCare = s.collectionCare.map(r=>({id:uid(),title:"",accessionNumber:"",source:"",artist:"",objectType:"",medium:"",dimensions:"",dateCreated:"",location:"HRAC",condition:"Good",conditionNotes:"",checked:"",storageRequirements:"",conservationHistory:"",movementLog:"",insuranceValue:"",loanHistory:"",provenance:"",notes:"",documents:[],profileImages:[],...r}));
+  s.callsForEntry = s.callsForEntry.map(r=>({id:uid(),title:"",organization:"",opportunityType:"Exhibition",deadline:"",status:"Researching",fee:"",eligibility:"",requirements:"",jurorInfo:"",importantDates:"",submissionChecklist:"",artworkSubmitted:"",contactName:"",contactEmail:"",website:"",documents:[],profileImages:[],notes:"",...r}));
   s.educationPrograms = Array.isArray(s.educationPrograms) ? s.educationPrograms : [];
   s.schoolTours = Array.isArray(s.schoolTours) ? s.schoolTours : [];
   s.educationResources = Array.isArray(s.educationResources) ? s.educationResources : [];
@@ -1265,39 +1270,22 @@ function educationSummaryHtml(){
   <div class="footer">HRAC Art Center Manager · Education & Outreach Release · Version ${APP_VERSION}</div><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),200));<\/script></body></html>`;
 }
 
-function renderSalesHub(){
-  const rows=state.salesRecords||[];
-  const total=rows.reduce((s,r)=>s+(Number(r.amount)||0),0);
-  document.getElementById("view-sales").innerHTML=`
-    <div class="manager-page-head"><div><h1>Sales Pipeline</h1><p>Track artwork inquiries, sales, commissions, and artist payouts.</p></div><div class="manager-actions"><button class="manager-btn" data-action="add-sale-record">＋ Add Sale Record</button></div></div>
-    <div class="manager-grid"><div class="manager-card"><h3>Recorded Sales</h3><div class="big">${rows.length}</div></div><div class="manager-card"><h3>Gross Sales</h3><div class="big">$${total.toLocaleString()}</div></div><div class="manager-card"><h3>Open Follow-ups</h3><div class="big">${rows.filter(r=>r.status!=="Paid").length}</div></div><div class="manager-card"><h3>Data Source</h3><div class="big">JSON</div><small>included in backups</small></div></div>
-    <br>${rows.length?`<table class="manager-table"><thead><tr><th>Date</th><th>Artist</th><th>Artwork</th><th>Buyer</th><th>Amount</th><th>Status</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date||"—")}</td><td>${esc(r.artist||"—")}</td><td>${esc(r.artwork||"—")}</td><td>${esc(r.buyer||"—")}</td><td>$${Number(r.amount||0).toLocaleString()}</td><td><span class="manager-status">${esc(r.status||"Open")}</span></td></tr>`).join("")}</tbody></table>`:`<div class="manager-empty">No sales records yet. Use “Add Sale Record” to test the workflow.</div>`}`;
-}
-function renderCollectionHub(){
-  const rows=state.collectionCare||[];
-  const artists=activeOperationalArtists();
-  const inventoryReady=artists.filter(a=>received(a.inventoryReceived)||a.inventoryFile).length;
-  const inventoryMissing=artists.length-inventoryReady;
-  const attention=rows.filter(r=>r.condition==="Needs Attention").length;
-  document.getElementById("view-collection").innerHTML=`
-    <div class="manager-page-head"><div><h1>Collection Care & Inventory</h1><p>Track exhibition inventory, HRAC’s permanent collection, and objects left in the center’s care.</p></div><div class="manager-actions"><button class="manager-btn" data-action="add-collection-item">＋ Add Collection Item</button></div></div>
-    <div class="manager-grid">
-      <div class="manager-card"><h3>Exhibition Inventories Ready</h3><div class="big">${inventoryReady}</div><small>of ${artists.length} active exhibitions</small></div>
-      <div class="manager-card"><h3>Inventories Missing</h3><div class="big">${inventoryMissing}</div><small>artist follow-up needed</small></div>
-      <div class="manager-card"><h3>Permanent Collection Items</h3><div class="big">${rows.length}</div><small>objects currently recorded</small></div>
-      <div class="manager-card"><h3>Needs Attention</h3><div class="big">${attention}</div><small>condition or location follow-up</small></div>
-    </div><br>
-    <div class="manager-two">
-      <section class="panel"><div class="panel-head"><div class="panel-title">📦 Exhibition Inventory Status</div></div><div class="panel-body">${artists.length?artists.map(a=>`<div class="manager-list-item" data-artist-id="${a.id}" style="cursor:pointer"><div><strong>${esc(a.artistName||"Untitled Artist")}</strong><div class="artist-show">${esc(a.exhibitionTitle||"Untitled Exhibition")}</div></div><span class="manager-status ${(received(a.inventoryReceived)||a.inventoryFile)?"good":"warn"}">${(received(a.inventoryReceived)||a.inventoryFile)?"Ready":"Missing"}</span></div>`).join(""):`<div class="manager-empty">No active exhibitions.</div>`}</div></section>
-      <section class="panel"><div class="panel-head"><div class="panel-title">⚒ Permanent Collection</div></div><div class="panel-body">${rows.length?rows.map(r=>`<div class="manager-list-item"><div><strong>${esc(r.title||"Untitled Object")}</strong><div class="artist-show">${esc(r.source||"Unknown source")} · ${esc(r.location||"No location")}</div></div><span class="manager-status ${r.condition==="Needs Attention"?"warn":"good"}">${esc(r.condition||"Good")}</span></div>`).join(""):`<div class="manager-empty">No permanent collection items recorded yet.</div>`}</div></section>
-    </div>`;
-}
-function renderCallsHub(){
-  const rows=state.callsForEntry||[];
-  document.getElementById("view-calls").innerHTML=`
-    <div class="manager-page-head"><div><h1>Calls for Entry</h1><p>Keep opportunities, deadlines, eligibility, and follow-up notes from slipping through the cracks.</p></div><div class="manager-actions"><button class="manager-btn" data-action="add-call-entry">＋ Add Opportunity</button></div></div>
-    ${rows.length?`<table class="manager-table"><thead><tr><th>Opportunity</th><th>Organization</th><th>Deadline</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows.sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).map(r=>`<tr><td><strong>${esc(r.title||"Untitled Call")}</strong></td><td>${esc(r.organization||"—")}</td><td>${fmtDate(r.deadline)}</td><td><span class="manager-status ${r.status==="Submitted"?"good":""}">${esc(r.status||"Researching")}</span></td><td>${esc(r.notes||"")}</td></tr>`).join("")}</tbody></table>`:`<div class="manager-empty">No calls are tracked yet. Add the next grant, exhibition, competition, or artist opportunity you hear about.</div>`}`;
-}
+
+function unifiedList(type){ return type==="sales"?state.salesRecords:type==="collection"?state.collectionCare:state.callsForEntry; }
+function unifiedRecord(){ return unifiedList(state.selectedUnifiedType).find(x=>x.id===state.selectedUnifiedId); }
+function uInput(label,field,value,id,type,inputType="text"){return `<label class="ed-field"><span>${label}</span><input type="${inputType}" value="${esc(value??"")}" data-unified-field="${field}" data-unified-id="${id}" data-unified-type="${type}"></label>`;}
+function uArea(label,field,value,id,type,placeholder=""){return `<label class="ed-field ed-area"><span>${label}</span><textarea placeholder="${esc(placeholder)}" data-unified-field="${field}" data-unified-id="${id}" data-unified-type="${type}">${esc(value??"")}</textarea></label>`;}
+function uSelect(label,field,value,id,type,opts){return `<label class="ed-field"><span>${label}</span><select data-unified-field="${field}" data-unified-id="${id}" data-unified-type="${type}">${opts.map(o=>`<option ${o===value?"selected":""}>${esc(o)}</option>`).join("")}</select></label>`;}
+function unifiedImages(r,type){const imgs=r.profileImages||[];return `<section class="ed-card ed-wide"><div class="ed-card-head"><div><h2>🖼 Images</h2><p>Reference, condition, artwork, receipt, installation, or submission images.</p></div><button class="manager-btn small" data-action="upload-unified-images" data-id="${r.id}" data-type="${type}">＋ Add Images</button><input class="hidden-file" type="file" multiple accept="image/*" data-unified-image-upload="${r.id}" data-unified-image-type="${type}"></div>${imgs.length?`<div class="education-image-grid">${imgs.map((im,i)=>`<figure class="education-image-card"><img src="${im.dataUrl}" alt="${esc(im.name||"Profile image")}"><figcaption><span>${esc(im.name||"Image")}</span><button class="icon-action danger" data-action="remove-unified-image" data-id="${r.id}" data-type="${type}" data-index="${i}">×</button></figcaption></figure>`).join("")}</div>`:`<div class="manager-empty">No images yet.</div>`}</section>`;}
+function unifiedHead(title,kicker,subtitle){return `<div class="ed-profile-head"><button class="btn" data-action="unified-back">← Back to Profiles</button><div class="ed-profile-title"><span class="ed-profile-kicker">${kicker}</span><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div><div class="ed-profile-actions"><button class="manager-btn secondary" data-action="duplicate-unified">Duplicate</button><button class="manager-btn danger-soft" data-action="delete-unified">Delete</button></div></div>`;}
+function salesProfile(r){const id=r.id,t="sales",bal=(Number(r.amount)||0)-(Number(r.deposit)||0);return unifiedHead(r.artwork||"Untitled Sale","Sales Pipeline",`${r.buyer||"Buyer not set"} · ${r.status||"Inquiry"}`)+`<div class="ed-profile-grid"><section class="ed-card ed-wide"><h2>📋 Sale Overview</h2><div class="ed-form-grid">${uInput("Date","date",r.date,id,t,"date")}${uSelect("Status","status",r.status,id,t,["Inquiry","Follow-Up","Reserved","Deposit Pending","Paid","Complete","Cancelled"])}${uInput("Artist","artist",r.artist,id,t)}${uInput("Artwork","artwork",r.artwork,id,t)}${uInput("Buyer / Client","buyer",r.buyer,id,t)}${uInput("Buyer Email","buyerEmail",r.buyerEmail,id,t,"email")}${uInput("Buyer Phone","buyerPhone",r.buyerPhone,id,t)}${uInput("Invoice Number","invoiceNumber",r.invoiceNumber,id,t)}</div></section><section class="ed-card"><h2>💳 Payments</h2><div class="ed-form-grid">${uInput("Sale Amount","amount",r.amount,id,t,"number")}${uInput("Deposit","deposit",r.deposit,id,t,"number")}${uInput("Balance","balance",bal,id,t,"number")}${uInput("Payment Method","paymentMethod",r.paymentMethod,id,t)}</div></section><section class="ed-card"><h2>🎨 Artist Payout</h2><div class="ed-form-grid">${uInput("Artist Payout","artistPayout",r.artistPayout,id,t,"number")}${uSelect("Payout Status","payoutStatus",r.payoutStatus,id,t,["Not Ready","Ready","Scheduled","Paid"])}</div></section><section class="ed-card"> <h2>📦 Delivery & Shipping</h2>${uArea("Shipping / Pickup Details","shipping",r.shipping,id,t)}</section><section class="ed-card"><h2>💬 Communication Log</h2>${uArea("Buyer Communication","communicationLog",r.communicationLog,id,t)}</section><section class="ed-card"><h2>📅 Timeline</h2>${uArea("Milestones & Follow-Ups","timeline",r.timeline,id,t)}</section><section class="ed-card"><h2>📝 Notes</h2>${uArea("Internal Notes","notes",r.notes,id,t)}</section>${unifiedImages(r,t)}</div>`;}
+function collectionProfile(r){const id=r.id,t="collection";return unifiedHead(r.title||"Untitled Object","Collection Care",`${r.condition||"Condition not set"} · ${r.location||"Location not set"}`)+`<div class="ed-profile-grid"><section class="ed-card ed-wide"><h2>🖼 Object Information</h2><div class="ed-form-grid">${uInput("Title / Object Name","title",r.title,id,t)}${uInput("Accession Number","accessionNumber",r.accessionNumber,id,t)}${uInput("Artist / Maker","artist",r.artist,id,t)}${uInput("Source / Donor","source",r.source,id,t)}${uInput("Object Type","objectType",r.objectType,id,t)}${uInput("Medium","medium",r.medium,id,t)}${uInput("Dimensions","dimensions",r.dimensions,id,t)}${uInput("Date Created","dateCreated",r.dateCreated,id,t)}${uInput("Current Location","location",r.location,id,t)}${uInput("Last Checked","checked",r.checked,id,t,"date")}</div></section><section class="ed-card"><h2>🩺 Condition</h2>${uSelect("Condition","condition",r.condition,id,t,["Excellent","Good","Fair","Needs Attention","Critical"])}${uArea("Condition Notes","conditionNotes",r.conditionNotes,id,t)}</section><section class="ed-card"><h2>📦 Storage</h2>${uArea("Storage Requirements","storageRequirements",r.storageRequirements,id,t)}</section><section class="ed-card"><h2>🛠 Conservation History</h2>${uArea("Treatment & Conservation","conservationHistory",r.conservationHistory,id,t)}</section><section class="ed-card"><h2>🚚 Movement Log</h2>${uArea("Locations, Dates & Handlers","movementLog",r.movementLog,id,t)}</section><section class="ed-card"><h2>🛡 Insurance & Provenance</h2>${uInput("Insurance Value","insuranceValue",r.insuranceValue,id,t,"number")}${uArea("Provenance","provenance",r.provenance,id,t)}</section><section class="ed-card"><h2>🤝 Loan History</h2>${uArea("Loans & Agreements","loanHistory",r.loanHistory,id,t)}</section><section class="ed-card ed-wide"><h2>📝 Notes</h2>${uArea("Internal Notes","notes",r.notes,id,t)}</section>${unifiedImages(r,t)}</div>`;}
+function callProfile(r){const id=r.id,t="calls";return unifiedHead(r.title||"Untitled Opportunity","Call for Entry",`${r.organization||"Organization not set"} · ${fmtDate(r.deadline)}`)+`<div class="ed-profile-grid"><section class="ed-card ed-wide"><h2>📋 Opportunity Overview</h2><div class="ed-form-grid">${uInput("Opportunity Title","title",r.title,id,t)}${uInput("Organization","organization",r.organization,id,t)}${uSelect("Opportunity Type","opportunityType",r.opportunityType,id,t,["Exhibition","Grant","Competition","Residency","Public Art","Vendor Opportunity","Other"])}${uSelect("Status","status",r.status,id,t,["Researching","Considering","Preparing","Submitted","Accepted","Declined","Closed"])}${uInput("Deadline","deadline",r.deadline,id,t,"date")}${uInput("Entry Fee","fee",r.fee,id,t)}${uInput("Contact Name","contactName",r.contactName,id,t)}${uInput("Contact Email","contactEmail",r.contactEmail,id,t,"email")}${uInput("Website","website",r.website,id,t,"url")}</div></section><section class="ed-card"><h2>✅ Eligibility</h2>${uArea("Eligibility Rules","eligibility",r.eligibility,id,t)}</section><section class="ed-card"><h2>📎 Requirements</h2>${uArea("Submission Requirements","requirements",r.requirements,id,t)}</section><section class="ed-card"><h2>☑ Submission Checklist</h2>${uArea("Checklist","submissionChecklist",r.submissionChecklist,id,t)}</section><section class="ed-card"><h2>🎨 Artwork Submitted</h2>${uArea("Artwork, Files & Details","artworkSubmitted",r.artworkSubmitted,id,t)}</section><section class="ed-card"><h2>⚖ Juror Information</h2>${uArea("Juror / Selection Panel","jurorInfo",r.jurorInfo,id,t)}</section><section class="ed-card"><h2>📅 Important Dates</h2>${uArea("Notification, Delivery, Install & Pickup","importantDates",r.importantDates,id,t)}</section><section class="ed-card ed-wide"><h2>📝 Notes</h2>${uArea("Internal Notes","notes",r.notes,id,t)}</section>${unifiedImages(r,t)}</div>`;}
+function renderUnifiedLibrary(type){const rows=unifiedList(type), cfg=type==="sales"?{view:"sales",title:"Sales Pipeline",desc:"Track inquiries, buyers, payments, payouts, and fulfillment.",icon:"💰",add:"add-sale-record"}:type==="collection"?{view:"collection",title:"Collection Care & Inventory",desc:"Manage permanent collection objects, condition, movement, storage, and conservation.",icon:"🖼",add:"add-collection-item"}:{view:"calls",title:"Calls for Entry",desc:"Manage opportunities, deadlines, eligibility, submissions, and results.",icon:"📣",add:"add-call-entry"};document.getElementById(`view-${cfg.view}`).innerHTML=`<div class="education-hero version10"><div><span class="cmd-kicker">Version 11.0 · Unified Profiles</span><h1>${cfg.title}</h1><p>${cfg.desc}</p></div><div class="education-hero-actions"><button class="manager-btn" data-action="${cfg.add}">＋ New Profile</button></div></div><div class="manager-grid"><div class="manager-card"><h3>Profiles</h3><div class="big">${rows.length}</div></div><div class="manager-card"><h3>Needs Attention</h3><div class="big">${type==="collection"?rows.filter(x=>["Needs Attention","Critical"].includes(x.condition)).length:type==="sales"?rows.filter(x=>!["Paid","Complete","Cancelled"].includes(x.status)).length:rows.filter(x=>!["Submitted","Accepted","Declined","Closed"].includes(x.status)).length}</div></div></div><br><div class="ed-profile-library">${rows.length?rows.map(r=>`<button class="ed-library-card" data-unified-open="${r.id}" data-unified-type="${type}"><span class="ed-library-badge">${esc(type==="collection"?r.condition||"Good":r.status||"Open")}</span><h3>${esc(type==="sales"?r.artwork||"Untitled Sale":r.title||"Untitled Profile")}</h3><p>${esc(type==="sales"?r.buyer||r.artist||"Buyer not set":type==="collection"?r.artist||r.source||"Source not set":r.organization||"Organization not set")}</p><small>${type==="sales"?`$${Number(r.amount||0).toLocaleString()} · ${fmtDate(r.date)}`:type==="collection"?`${r.location||"No location"} · Checked ${fmtDate(r.checked)}`:`Deadline ${fmtDate(r.deadline)}`}</small><span class="ed-library-link">Open profile →</span></button>`).join(""):`<div class="manager-empty">No profiles yet.</div>`}</div>`;}
+function renderSalesHub(){const r=state.selectedUnifiedType==="sales"&&unifiedRecord();if(r)document.getElementById("view-sales").innerHTML=`<div class="education-profile-shell">${salesProfile(r)}</div>`;else renderUnifiedLibrary("sales");}
+function renderCollectionHub(){const r=state.selectedUnifiedType==="collection"&&unifiedRecord();if(r)document.getElementById("view-collection").innerHTML=`<div class="education-profile-shell">${collectionProfile(r)}</div>`;else renderUnifiedLibrary("collection");}
+function renderCallsHub(){const r=state.selectedUnifiedType==="calls"&&unifiedRecord();if(r)document.getElementById("view-calls").innerHTML=`<div class="education-profile-shell">${callProfile(r)}</div>`;else renderUnifiedLibrary("calls");}
+
 function renderInsightsHub(){
   const artists=activeOperationalArtists();
   const complete=artists.filter(a=>derived(a).percent===100).length;
@@ -1587,6 +1575,9 @@ document.addEventListener("click", e=>{
     return;
   }
 
+  const unifiedOpen=e.target.closest("[data-unified-open]");
+  if(unifiedOpen){ state.selectedUnifiedId=unifiedOpen.dataset.unifiedOpen; state.selectedUnifiedType=unifiedOpen.dataset.unifiedType; render(); showTab(state.selectedUnifiedType,false); window.scrollTo({top:0,behavior:"smooth"}); return; }
+
   const educationOpen=e.target.closest("[data-education-open]");
   if(educationOpen){
     state.selectedEducationId=educationOpen.dataset.educationOpen;
@@ -1608,6 +1599,7 @@ document.addEventListener("click", e=>{
 });
 
 document.addEventListener("input", e=>{
+  if(e.target.matches("[data-unified-field]")){ if(readOnlyMode)return; const list=unifiedList(e.target.dataset.unifiedType), item=list.find(x=>x.id===e.target.dataset.unifiedId); if(item){ const v=e.target.type==="number"?Number(e.target.value)||0:e.target.value; item[e.target.dataset.unifiedField]=v; markDirty(); } return; }
   if(readOnlyMode && e.target.matches("[data-field]")){ alert("Read-only mode is on. Click Start Editing from the Collaboration panel before making changes."); return; }
   if(e.target.matches("[data-participant-field]")){
     if(readOnlyMode){ alert("Read-only mode is on. Click Start Editing before making changes."); return; }
@@ -1646,6 +1638,8 @@ document.addEventListener("input", e=>{
   if(e.target.id==="globalSearch") globalSearch(e.target.value);
 });
 document.addEventListener("change", e=>{
+  if(e.target.matches("[data-unified-field]")){ if(readOnlyMode)return; const item=unifiedList(e.target.dataset.unifiedType).find(x=>x.id===e.target.dataset.unifiedId); if(item){item[e.target.dataset.unifiedField]=e.target.type==="number"?Number(e.target.value)||0:e.target.value;markDirty();render();showTab(e.target.dataset.unifiedType,false);}return;}
+  if(e.target.matches("[data-unified-image-upload]")){const item=unifiedList(e.target.dataset.unifiedImageType).find(x=>x.id===e.target.dataset.unifiedImageUpload);if(item){[...e.target.files].forEach(file=>{if(!file.type.startsWith("image/"))return;const reader=new FileReader();reader.onload=()=>{item.profileImages=item.profileImages||[];item.profileImages.push({name:file.name,type:file.type,size:file.size,dataUrl:reader.result,uploaded:todayISO()});markDirty();render();showTab(e.target.dataset.unifiedImageType,false);};reader.readAsDataURL(file);});}e.target.value="";return;}
   if(e.target.matches("[data-education-image-upload]")){
     if(readOnlyMode){ alert("Read-only mode is on. Click Start Editing before uploading images."); return; }
     const record=educationRecord(e.target.dataset.educationImageType,e.target.dataset.educationImageUpload);
@@ -1767,33 +1761,14 @@ function doAction(btn){
   if(act==="confirm-collab-edit"){ confirmCollaborationEdit(); }
   if(act==="confirm-collab-readonly"){ confirmCollaborationReadOnly(); }
   if(act==="print-due-list"){ printDueList(); return; }
-  if(act==="add-sale-record"){
-    if(readOnlyMode){ alert("Start Editing before adding records."); return; }
-    const artist=prompt("Artist name:"); if(!artist) return;
-    const artwork=prompt("Artwork title:")||"Untitled";
-    const buyer=prompt("Buyer / client:")||"Not recorded";
-    const amount=prompt("Sale amount (numbers only):")||"0";
-    state.salesRecords.push({id:uid(),date:todayISO(),artist,artwork,buyer,amount:Number(amount)||0,status:"Open"});
-    logActivity("Added sales record", artist+" — "+artwork); markDirty(); render(); showTab("sales",false);
-  }
-  if(act==="add-collection-item"){
-    if(readOnlyMode){ alert("Start Editing before adding records."); return; }
-    const title=prompt("Object or artwork title:"); if(!title) return;
-    const source=prompt("Artist, donor, or source:")||"Not recorded";
-    const location=prompt("Current location:")||"HRAC";
-    const condition=prompt("Condition (Good / Fair / Needs Attention):")||"Good";
-    state.collectionCare.push({id:uid(),title,source,location,condition,checked:todayISO()});
-    logActivity("Added collection-care item", title); markDirty(); render(); showTab("collection",false);
-  }
-  if(act==="add-call-entry"){
-    if(readOnlyMode){ alert("Start Editing before adding records."); return; }
-    const title=prompt("Opportunity title:"); if(!title) return;
-    const organization=prompt("Organization:")||"Not recorded";
-    const deadline=prompt("Deadline (YYYY-MM-DD):")||"";
-    const notes=prompt("Quick notes or eligibility:")||"";
-    state.callsForEntry.push({id:uid(),title,organization,deadline,status:"Researching",notes});
-    logActivity("Added call for entry", title); markDirty(); render(); showTab("calls",false);
-  }
+  if(act==="add-sale-record"){ const item={id:uid(),date:todayISO(),artist:"",artwork:"New Sale Record",buyer:"",buyerEmail:"",buyerPhone:"",amount:0,status:"Inquiry",deposit:0,balance:0,paymentMethod:"",artistPayout:0,payoutStatus:"Not Ready",shipping:"",invoiceNumber:"",communicationLog:"",timeline:"",notes:"",documents:[],profileImages:[]}; unifiedList("sales").push(item); state.selectedUnifiedId=item.id; state.selectedUnifiedType="sales"; markDirty(); render(); showTab("sales",false); return; }
+  if(act==="add-collection-item"){ const item={id:uid(),title:"New Collection Item",accessionNumber:"",source:"",artist:"",objectType:"",medium:"",dimensions:"",dateCreated:"",location:"HRAC",condition:"Good",conditionNotes:"",checked:todayISO(),storageRequirements:"",conservationHistory:"",movementLog:"",insuranceValue:"",loanHistory:"",provenance:"",notes:"",documents:[],profileImages:[]}; unifiedList("collection").push(item); state.selectedUnifiedId=item.id; state.selectedUnifiedType="collection"; markDirty(); render(); showTab("collection",false); return; }
+  if(act==="add-call-entry"){ const item={id:uid(),title:"New Opportunity",organization:"",opportunityType:"Exhibition",deadline:"",status:"Researching",fee:"",eligibility:"",requirements:"",jurorInfo:"",importantDates:"",submissionChecklist:"",artworkSubmitted:"",contactName:"",contactEmail:"",website:"",documents:[],profileImages:[],notes:""}; unifiedList("calls").push(item); state.selectedUnifiedId=item.id; state.selectedUnifiedType="calls"; markDirty(); render(); showTab("calls",false); return; }
+  if(act==="unified-back"){state.selectedUnifiedId=null;state.selectedUnifiedType=null;render();showTab(activeTab,false);return;}
+  if(act==="duplicate-unified"){const r=unifiedRecord();if(r){const copy={...r,id:uid(),title:r.title?`${r.title} Copy`:r.title,artwork:r.artwork?`${r.artwork} Copy`:r.artwork,profileImages:[...(r.profileImages||[])]};unifiedList(state.selectedUnifiedType).push(copy);state.selectedUnifiedId=copy.id;markDirty();render();showTab(state.selectedUnifiedType,false);}return;}
+  if(act==="delete-unified"){const r=unifiedRecord();if(r&&confirm("Delete this profile?")){const list=unifiedList(state.selectedUnifiedType);list.splice(list.findIndex(x=>x.id===r.id),1);state.selectedUnifiedId=null;state.selectedUnifiedType=null;markDirty();render();showTab(activeTab,false);}return;}
+  if(act==="upload-unified-images"){const input=document.querySelector(`input[data-unified-image-upload="${btn.dataset.id}"][data-unified-image-type="${btn.dataset.type}"]`);if(input)input.click();return;}
+  if(act==="remove-unified-image"){const r=unifiedList(btn.dataset.type).find(x=>x.id===btn.dataset.id);if(r&&confirm("Remove this image?")){r.profileImages.splice(Number(btn.dataset.index),1);markDirty();render();showTab(btn.dataset.type,false);}return;}
   if(act==="add-participant"){
     const record=educationRecord(btn.dataset.type,btn.dataset.id);
     if(record){

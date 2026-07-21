@@ -1,9 +1,14 @@
-# HRAC Art Center Manager — Version 10.2
-## Fall 2026 ARTisTRY Import & Image Picker Repair
+# HRAC Art Center Manager 11.0 — Unified Profiles
 
-- Repairs the Education & Outreach Add Images button.
-- Includes a companion JSON containing 12 filled Fall 2026 ARTisTRY profiles.
-- The companion JSON embeds 36 example images extracted from the Word planning document.
+Collection Care, Sales Pipeline, and Calls for Entry now use the same profile-card workflow as Education & Outreach.
 
-Upload this folder to GitHub, replace matching files, and hard-refresh with Ctrl + Shift + R.
-Then import `HRAC_Art_Center_Manager_10.2_Fall_2026_ARTisTRY_FILLED.json`.
+## Collection Care profiles
+Object information, condition, storage, conservation, movement, insurance, provenance, loans, notes, and images.
+
+## Sales profiles
+Buyer, artwork, pricing, deposits, balance, artist payout, shipping, communications, timeline, notes, and images.
+
+## Calls for Entry profiles
+Opportunity details, eligibility, requirements, checklist, artwork submitted, jurors, dates, contacts, notes, and images.
+
+Existing records are upgraded automatically.
