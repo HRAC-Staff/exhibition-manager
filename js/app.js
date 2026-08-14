@@ -1,7 +1,7 @@
 (function(){
 const STORAGE_KEY = "hrac_stable_foundation_v1";
 const DEFAULT_YEARS = ["2026","2027","2028"];
-const APP_VERSION = "11.1";
+const APP_VERSION = "11.0";
 let state = loadState();
 let dragId = null;
 let dirty = false;
@@ -61,17 +61,6 @@ function normalize(s){
   s.salesRecords = Array.isArray(s.salesRecords) ? s.salesRecords : [];
   s.collectionCare = Array.isArray(s.collectionCare) ? s.collectionCare : [];
   s.callsForEntry = Array.isArray(s.callsForEntry) ? s.callsForEntry : [];
-  s.customCalendarEvents = Array.isArray(s.customCalendarEvents) ? s.customCalendarEvents : [];
-  s.calendarPreferences = s.calendarPreferences && typeof s.calendarPreferences==="object" ? s.calendarPreferences : {};
-  s.calendarPreferences.month = s.calendarPreferences.month || todayISO().slice(0,7);
-  s.calendarPreferences.view = s.calendarPreferences.view || "month";
-  s.calendarPreferences.includeHistory = !!s.calendarPreferences.includeHistory;
-  s.calendarPreferences.filters = s.calendarPreferences.filters && typeof s.calendarPreferences.filters==="object" ? s.calendarPreferences.filters : {
-    exhibition:true,due:true,education:true,tour:true,call:true,custom:true
-  };
-  s.reportPreferences = s.reportPreferences && typeof s.reportPreferences==="object" ? s.reportPreferences : {};
-  s.reportPreferences.includeNotes = !!s.reportPreferences.includeNotes;
-  s.schemaVersion = s.schemaVersion || "11.1";
   s.selectedUnifiedId = s.selectedUnifiedId || null;
   s.selectedUnifiedType = s.selectedUnifiedType || null;
   s.salesRecords = s.salesRecords.map(r=>({id:uid(),date:"",artist:"",artwork:"",buyer:"",buyerEmail:"",buyerPhone:"",amount:0,status:"Inquiry",deposit:0,balance:0,paymentMethod:"",artistPayout:0,payoutStatus:"Not Ready",shipping:"",invoiceNumber:"",communicationLog:"",timeline:"",notes:"",documents:[],profileImages:[],...r}));
@@ -306,10 +295,7 @@ function prepareStateForExport(){
   state.lastSavedBy = name;
   state.lastSavedAt = new Date().toLocaleString();
   state.appVersion = APP_VERSION;
-  state.schemaVersion = APP_VERSION;
   state.trackerMetadata = {
-    ...(state.trackerMetadata || {}),
-    schemaVersion: APP_VERSION,
     trackerVersion: APP_VERSION,
     lastEditor: name,
     editorInitials: initials,
@@ -521,138 +507,15 @@ function showTab(tab,doSave=true){
   document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
   if(doSave) markDirty();
 }
-function calendarTypeMeta(type){
-  const map={
-    exhibition:{label:"Exhibitions",cls:"cal-exhibition"},
-    due:{label:"Due Dates",cls:"cal-due"},
-    education:{label:"Education",cls:"cal-education"},
-    tour:{label:"School Tours",cls:"cal-tour"},
-    call:{label:"Calls for Entry",cls:"cal-call"},
-    custom:{label:"HRAC Events",cls:"cal-custom"}
-  };
-  return map[type]||map.custom;
-}
 function allEvents(includePast=false){
-  const events=[];
+  const events = [];
   state.artists.filter(a=>includePast || !isPastExhibition(a)).forEach(a=>{
-    if(a.exhibitionStartDate) events.push({date:a.exhibitionStartDate,label:(a.exhibitionTitle||a.artistName||"Exhibition")+" opens",sub:a.artistName||"",type:"exhibition",sourceType:"artist",sourceId:a.id});
-    if(a.exhibitionEndDate) events.push({date:a.exhibitionEndDate,label:(a.exhibitionTitle||a.artistName||"Exhibition")+" closes",sub:a.artistName||"",type:"exhibition",sourceType:"artist",sourceId:a.id});
-    if(a.installDate) events.push({date:a.installDate,label:(a.artistName||"Untitled")+" — Install",sub:(a.gallery||"")+" Gallery",type:"exhibition",sourceType:"artist",sourceId:a.id});
-    if(a.deinstallDate) events.push({date:a.deinstallDate,label:(a.artistName||"Untitled")+" — De-install",sub:(a.gallery||"")+" Gallery",type:"exhibition",sourceType:"artist",sourceId:a.id});
-    needsList(a).forEach(n=>{
-      if(n.due) events.push({date:n.due,label:n.label+" due",sub:a.artistName||"Untitled",type:"due",sourceType:"artist",sourceId:a.id,overdue:n.due<todayISO()});
-    });
+    if(a.installDate) events.push({date:a.installDate,label:(a.artistName||"Untitled")+" — Install",sub:(a.gallery||"")+" Gallery",type:"install",artist:a});
+    if(a.deinstallDate) events.push({date:a.deinstallDate,label:(a.artistName||"Untitled")+" — Deinstall",sub:(a.gallery||"")+" Gallery",type:"deinstall",artist:a});
+    needsList(a).forEach(n=> n.due && events.push({date:n.due,label:n.label+" due",sub:a.artistName||"Untitled",type:n.due<todayISO()?"overdue":"due",artist:a}));
   });
-  (state.educationPrograms||[]).forEach(p=>{
-    if(p.date) events.push({date:p.date,label:p.title||"Education Program",sub:[p.category,p.audience].filter(Boolean).join(" · "),type:"education",sourceType:"program",sourceId:p.id});
-    if(p.endDate && p.endDate!==p.date) events.push({date:p.endDate,label:(p.title||"Education Program")+" ends",sub:p.category||"",type:"education",sourceType:"program",sourceId:p.id});
-  });
-  (state.schoolTours||[]).forEach(t=>{
-    if(t.date) events.push({date:t.date,label:t.school||"School Tour",sub:[t.grade,(Number(t.students)||0)+" students"].filter(Boolean).join(" · "),type:"tour",sourceType:"tour",sourceId:t.id});
-  });
-  (state.callsForEntry||[]).forEach(c=>{
-    if(c.deadline) events.push({date:c.deadline,label:c.title||"Call for Entry",sub:c.organization||"",type:"call",sourceType:"call",sourceId:c.id});
-  });
-  (state.customCalendarEvents||[]).forEach(c=>{
-    if(c.date) events.push({date:c.date,label:c.title||"HRAC Event",sub:[c.time,c.location].filter(Boolean).join(" · "),type:"custom",sourceType:"custom",sourceId:c.id,notes:c.notes||""});
-  });
-  return events.filter(e=>e.date).sort((a,b)=>a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+  return events.sort((a,b)=>a.date.localeCompare(b.date));
 }
-function calendarPrefs(){ return state.calendarPreferences; }
-function visibleCalendarEvents(){
-  const prefs=calendarPrefs();
-  const filters=prefs.filters||{};
-  return allEvents(prefs.includeHistory).filter(e=>filters[e.type]!==false);
-}
-function calendarMonthDate(delta=0){
-  const prefs=calendarPrefs();
-  const base=new Date((prefs.month||todayISO().slice(0,7))+"-01T12:00:00");
-  base.setMonth(base.getMonth()+delta);
-  prefs.month=base.toISOString().slice(0,7);
-  return prefs.month;
-}
-function calendarMonthLabel(month){
-  return new Date(month+"-01T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
-}
-function calendarMonthGrid(month,events){
-  const first=new Date(month+"-01T12:00:00");
-  const y=first.getFullYear(),m=first.getMonth();
-  const startDay=first.getDay();
-  const days=new Date(y,m+1,0).getDate();
-  const prevDays=new Date(y,m,0).getDate();
-  const cells=[];
-  for(let i=0;i<42;i++){
-    const n=i-startDay+1;
-    let d,muted=false;
-    if(n<1){ d=new Date(y,m-1,prevDays+n); muted=true; }
-    else if(n>days){ d=new Date(y,m+1,n-days); muted=true; }
-    else d=new Date(y,m,n);
-    const iso=[d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");
-    const dayEvents=events.filter(e=>e.date===iso);
-    const shown=dayEvents.slice(0,4);
-    cells.push(`<div class="cal-day ${muted?"muted":""} ${iso===todayISO()?"today":""}" data-calendar-date="${iso}">
-      <div class="cal-day-number"><span>${d.getDate()}</span>${iso===todayISO()?'<b>Today</b>':""}</div>
-      <div class="cal-day-events">${shown.map(calendarEventChip).join("")}${dayEvents.length>4?`<button class="cal-more" data-action="calendar-day-agenda" data-date="${iso}">+${dayEvents.length-4} more</button>`:""}</div>
-    </div>`);
-  }
-  return `<div class="calendar-month-grid">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<div class="cal-dow">${x}</div>`).join("")}${cells.join("")}</div>`;
-}
-function calendarEventChip(e){
-  const meta=calendarTypeMeta(e.type);
-  return `<button class="cal-event ${meta.cls} ${e.overdue?"overdue":""}" data-calendar-open="${esc(e.sourceId||"")}" data-calendar-source="${esc(e.sourceType||"")}" title="${esc(e.label+" — "+e.sub)}"><span>${esc(e.label)}</span></button>`;
-}
-function upcoming30Markup(events){
-  const from=todayISO(),to=addDays(from,30);
-  const list=events.filter(e=>e.date>=from && e.date<=to);
-  if(!list.length) return `<div class="manager-empty">Nothing is scheduled in the next 30 days.</div>`;
-  const groups=list.reduce((a,e)=>{(a[e.date]=a[e.date]||[]).push(e);return a;},{});
-  return Object.entries(groups).map(([date,items])=>`<div class="cal-agenda-date">
-    <div class="datebox"><span>${monthShort(date)}</span><b>${dayNum(date)}</b></div>
-    <div class="cal-agenda-items">${items.map(e=>{const meta=calendarTypeMeta(e.type);return `<button class="cal-agenda-event" data-calendar-open="${esc(e.sourceId||"")}" data-calendar-source="${esc(e.sourceType||"")}"><i class="${meta.cls}"></i><span><strong>${esc(e.label)}</strong><small>${esc(e.sub||meta.label)}</small></span></button>`}).join("")}</div>
-  </div>`).join("");
-}
-function calendarFiltersMarkup(){
-  const prefs=calendarPrefs(),filters=prefs.filters||{};
-  return Object.entries({exhibition:"Exhibitions",due:"Due Dates",education:"Education",tour:"School Tours",call:"Calls for Entry",custom:"HRAC Events"}).map(([key,label])=>`<label class="cal-filter"><input type="checkbox" data-calendar-filter="${key}" ${filters[key]!==false?"checked":""}><span class="${calendarTypeMeta(key).cls}"></span>${label}</label>`).join("");
-}
-function calendarWorkspaceMarkup(){
-  const prefs=calendarPrefs(),events=visibleCalendarEvents(),month=prefs.month||todayISO().slice(0,7);
-  const monthEvents=events.filter(e=>e.date.slice(0,7)===month);
-  return `<div class="manager-page-head calendar-page-head"><div><h1>Schedule</h1><p>Exhibitions, deadlines, education, school tours, calls for entry, and HRAC events in one calendar.</p></div><div class="manager-actions"><button class="manager-btn" data-action="add-calendar-event">＋ Add HRAC Event</button></div></div>
-    <div class="calendar-toolbar">
-      <div class="calendar-nav"><button class="btn" data-action="calendar-prev">‹</button><button class="btn" data-action="calendar-today">Today</button><button class="btn" data-action="calendar-next">›</button><h2>${calendarMonthLabel(month)}</h2></div>
-      <div class="calendar-view-toggle"><button class="btn ${prefs.view==="month"?"primary":""}" data-action="calendar-view-month">Month</button><button class="btn ${prefs.view==="upcoming"?"primary":""}" data-action="calendar-view-upcoming">Upcoming 30 Days</button></div>
-    </div>
-    <div class="calendar-filterbar">${calendarFiltersMarkup()}<label class="cal-history"><input id="calendarIncludePast" type="checkbox" ${prefs.includeHistory?"checked":""}> Include finished exhibition history</label></div>
-    ${prefs.view==="upcoming"
-      ? `<section class="panel"><div class="panel-head"><div class="panel-title">Upcoming in 30 Days</div><span class="manager-status">${events.filter(e=>e.date>=todayISO()&&e.date<=addDays(todayISO(),30)).length} events</span></div><div class="panel-body"><div class="calendar-upcoming-full">${upcoming30Markup(events)}</div></div></section>`
-      : `<div class="calendar-workspace"><section class="panel calendar-main-panel"><div class="panel-head"><div class="panel-title">${calendarMonthLabel(month)}</div><span class="manager-status">${monthEvents.length} events</span></div><div class="panel-body calendar-grid-body">${calendarMonthGrid(month,events)}</div></section><aside class="panel calendar-30-panel"><div class="panel-head"><div class="panel-title">Upcoming in 30 Days</div><button class="filter" data-action="calendar-view-upcoming">View All →</button></div><div class="panel-body">${upcoming30Markup(events)}</div></aside></div>`}`;
-}
-function renderScheduleHub(){ document.getElementById("view-schedule").innerHTML=calendarWorkspaceMarkup(); }
-function renderCalendar(){ const v=document.getElementById("view-calendar"); if(v) v.innerHTML=calendarWorkspaceMarkup(); }
-function refreshCalendarWorkspace(){ renderScheduleHub(); renderCalendar(); }
-function openCalendarSource(source,id){
-  if(source==="artist"){
-    const a=state.artists.find(x=>x.id===id); if(a){state.selectedArtistId=a.id;render();showTab(a.year,false);window.scrollTo({top:0,behavior:"smooth"});} return;
-  }
-  if(source==="program"){state.selectedEducationId=id;state.selectedEducationType="program";render();showTab("education",false);window.scrollTo({top:0,behavior:"smooth"});return;}
-  if(source==="tour"){state.selectedEducationId=id;state.selectedEducationType="tour";render();showTab("education",false);window.scrollTo({top:0,behavior:"smooth"});return;}
-  if(source==="call"){state.selectedUnifiedId=id;state.selectedUnifiedType="calls";render();showTab("calls",false);window.scrollTo({top:0,behavior:"smooth"});return;}
-  if(source==="custom"){editCustomCalendarEvent(id);return;}
-}
-function editCustomCalendarEvent(id){
-  const event=(state.customCalendarEvents||[]).find(x=>x.id===id); if(!event)return;
-  if(readOnlyMode){alert("Read-only mode is on. Start Editing before changing calendar events.");return;}
-  const title=prompt("Event title:",event.title||""); if(title===null)return;
-  const date=prompt("Event date (YYYY-MM-DD):",event.date||""); if(date===null)return;
-  const time=prompt("Time (optional):",event.time||""); if(time===null)return;
-  const location=prompt("Location (optional):",event.location||""); if(location===null)return;
-  const notes=prompt("Notes (optional):",event.notes||""); if(notes===null)return;
-  Object.assign(event,{title:title.trim()||"HRAC Event",date:date.trim(),time:time.trim(),location:location.trim(),notes:notes.trim()});
-  if(confirm("Save these changes?\n\nChoose Cancel on the next prompt if you do not want to delete the event.")){markDirty();refreshCalendarWorkspace();return;}
-  if(confirm("Delete this custom HRAC event?")){state.customCalendarEvents=state.customCalendarEvents.filter(x=>x.id!==id);markDirty();refreshCalendarWorkspace();}
-}
-
 function renderDashboard(){
   const working = activeOperationalArtists();
   const year = activeYear();
@@ -849,7 +712,7 @@ function yearArtistCard(a){
 function profileMarkup(a){
   const d=derived(a), needs=needsList(a);
   return `<div class="profile">
-    <div class="profile-hero"><div class="profile-id"><div class="avatar-lg">${a.profileImage?.dataUrl ? `<img src="${a.profileImage.dataUrl}" alt="">` : initials(a)}</div><div><div class="profile-title">${esc(a.artistName||"Untitled Artist")}</div><div class="profile-sub">${esc(a.exhibitionTitle||"No exhibition title yet")}</div><div class="pills"><span class="pill">${esc(a.gallery||"No gallery")}</span><span class="pill">${esc(a.role||"No role")}</span><span class="pill ${d.cls}">${d.status}</span></div></div></div><div class="completion"><div class="ring-big" style="--p:${d.percent}%">${d.percent}%</div><div><strong>${d.complete}/${d.total} complete</strong><br><small>${needs.length ? needs.length+" item(s) still needed" : "Profile looks ready"}</small></div><div class="profile-actions"><button class="btn" data-action="toggle-favorite">${a.favorite?"★ Favorited":"☆ Favorite"}</button><button class="btn" data-action="toggle-pin">${a.pinned?"📌 Pinned":"📍 Pin Exhibition"}</button><button class="btn" data-action="email-template">Email Template</button><button class="btn" data-action="print-artwork-label">Artwork Label</button><button class="btn" data-action="print-exhibition-details">Exhibition Details</button><button class="btn" data-action="print-artist-checklist">Print Checklist</button><button class="btn" data-action="copy-reminder">Reminder</button><button class="btn" data-action="duplicate-selected">Duplicate</button><button class="btn danger" data-action="delete-selected">Delete</button></div></div></div>
+    <div class="profile-hero"><div class="profile-id"><div class="avatar-lg">${a.profileImage?.dataUrl ? `<img src="${a.profileImage.dataUrl}" alt="">` : initials(a)}</div><div><div class="profile-title">${esc(a.artistName||"Untitled Artist")}</div><div class="profile-sub">${esc(a.exhibitionTitle||"No exhibition title yet")}</div><div class="pills"><span class="pill">${esc(a.gallery||"No gallery")}</span><span class="pill">${esc(a.role||"No role")}</span><span class="pill ${d.cls}">${d.status}</span></div></div></div><div class="completion"><div class="ring-big" style="--p:${d.percent}%">${d.percent}%</div><div><strong>${d.complete}/${d.total} complete</strong><br><small>${needs.length ? needs.length+" item(s) still needed" : "Profile looks ready"}</small></div><div class="profile-actions"><button class="btn" data-action="toggle-favorite">${a.favorite?"★ Favorited":"☆ Favorite"}</button><button class="btn" data-action="toggle-pin">${a.pinned?"📌 Pinned":"📍 Pin Exhibition"}</button><button class="btn" data-action="email-template">Email Template</button><button class="btn" data-action="print-artwork-label">Artwork Label</button><button class="btn" data-action="print-artist-checklist">Print Checklist</button><button class="btn" data-action="copy-reminder">Reminder</button><button class="btn" data-action="duplicate-selected">Duplicate</button><button class="btn danger" data-action="delete-selected">Delete</button></div></div></div>
     <div class="form-grid">${photoContact(a)}${statementCard(a)}${promoInventory(a,d)}${exhibitionCard(a,d)}${materialsCard(a)}${webCard(a)}${contractCard(a)}${notesCard(a)}</div>
   </div>`;
 }
@@ -891,6 +754,16 @@ function fileCard(a,key,title,accept){
   </div>`;
 }
 
+function renderCalendar(){
+  const events = allEvents(false);
+  const hidden = archivedArtists().length;
+  (document.getElementById("view-calendar")||document.createElement("div")).innerHTML = `<div class="panel"><div class="panel-head"><div class="panel-title">▣ Calendar Dates</div><div class="report-toolbar" style="margin:0"><select id="calendarIncludePast"><option value="no">Hide finished exhibitions</option><option value="yes">Include history / analysis</option></select></div></div><div class="panel-body"><div id="calendarList">${calendarListMarkup(events, hidden, false)}</div></div></div>`;
+}
+function calendarListMarkup(events, hidden=0, includePast=false){
+  return `${!includePast && hidden ? `<div class="empty" style="margin-bottom:12px">${hidden} finished exhibition(s) are hidden from the working calendar. Use history / analysis to include them.</div>` : ""}${events.length ? events.map(e=>`<div class="event-row"><div class="datebox"><span>${monthShort(e.date)}</span><b>${dayNum(e.date)}</b></div><div><strong>${esc(e.label)}</strong><div class="artist-show">${esc(e.sub)}</div></div><span class="pill">${fmtDate(e.date)}</span></div>`).join("") : `<div class="empty">No dates match this view.</div>`}`;
+}
+function refreshCalendarList(){ const includePast=document.getElementById("calendarIncludePast")?.value === "yes"; const box=document.getElementById("calendarList"); if(box) box.innerHTML=calendarListMarkup(allEvents(includePast), archivedArtists().length, includePast); }
+
 function reportYearsOptions(){ return state.years.map(y=>`<option value="${esc(y)}" ${y===activeYear()?"selected":""}>${esc(y)}</option>`).join(""); }
 function latestOperationalDate(a){
   const d = dueDates(a);
@@ -918,11 +791,7 @@ function reportTaskMarkup(task){
     <span class="report-task-copy"><strong>${esc(task.label)}</strong>${task.due?`<small>Due ${fmtDate(task.due)}</small>`:""}</span>
   </div>`;
 }
-function reportNotesMarkup(a){
-  if(!a.notes || !String(a.notes).trim()) return `<div class="report-notes empty-note"><strong>Notes / Follow Up</strong><p>No notes entered.</p></div>`;
-  return `<div class="report-notes"><strong>Notes / Follow Up</strong><p>${esc(a.notes).replace(/\n/g,"<br>")}</p></div>`;
-}
-function reportArtistLine(a,includeNotes=false){
+function reportArtistLine(a){
   const d=derived(a), tasks=reportTasks(a), past=isPastExhibition(a);
   const incomplete=tasks.filter(t=>!t.done);
   return `<article class="print-artist ${past?"past-muted":""}">
@@ -942,7 +811,6 @@ function reportArtistLine(a,includeNotes=false){
       <strong>${incomplete.length?incomplete.length+" item(s) still incomplete":"All checklist items complete"}</strong>
       ${incomplete.length?`<span>Remaining: ${incomplete.map(t=>esc(t.label)).join(", ")}</span>`:`<span>This artist checklist is ready.</span>`}
     </div>
-    ${includeNotes?reportNotesMarkup(a):""}
   </article>`;
 }
 function yearReportArtists(year, includePast=false){ return sortArtists(state.artists.filter(a=>String(a.year)===String(year)).filter(a=>includePast || !isPastExhibition(a))); }
@@ -952,7 +820,7 @@ function reportDocHeader(title, meta){
   return `<header class="print-head">
     <div class="report-brand-block">
       <div class="print-brand">HRAC</div>
-      <div class="print-sub">ART CENTER MANAGER</div>
+      <div class="print-sub">ARTIST TRACKER INTERNAL CHECKLIST</div>
     </div>
     <div class="report-title-block">
       <h1 class="print-title">${esc(title)}</h1>
@@ -960,40 +828,18 @@ function reportDocHeader(title, meta){
     </div>
   </header>`;
 }
-function reportDocFooter(){ return `<footer class="print-footer"><span>Hammond Regional Arts Center</span><span>HRAC Art Center Manager • Version ${APP_VERSION}</span></footer>`; }
-function buildYearReport(year, includePast=false, includeNotes=false){
+function reportDocFooter(){ return `<footer class="print-footer"><span>Hammond Regional Arts Center</span><span>HRAC Exhibition Manager • Version 6.5</span></footer>`; }
+function buildYearReport(year, includePast=false){
   const artists=yearReportArtists(year, includePast);
-  return `<div class="print-doc">${reportDocHeader(year+" Exhibition Checklist", (includePast?"Including history / analysis":"Working list only")+(includeNotes?" • Notes included":""))}
-    <main class="report-content">${artists.length?artists.map(a=>reportArtistLine(a,includeNotes)).join(""):`<div class="report-empty">No artists match this report.</div>`}</main>
+  return `<div class="print-doc">${reportDocHeader(year+" Exhibition Checklist", includePast?"Including history / analysis":"Working list only")}
+    <main class="report-content">${artists.length?artists.map(reportArtistLine).join(""):`<div class="report-empty">No artists match this report.</div>`}</main>
     ${reportDocFooter()}
   </div>`;
 }
-function buildArtistReport(a,includeNotes=false){
-  return `<div class="print-doc">${reportDocHeader((a.artistName||"Untitled Artist")+" Checklist", (a.exhibitionTitle||"No exhibition title")+" • "+(a.year||"No year")+(includeNotes?" • Notes included":""))}
-    <main class="report-content">${reportArtistLine(a,includeNotes)}</main>
+function buildArtistReport(a){
+  return `<div class="print-doc">${reportDocHeader((a.artistName||"Untitled Artist")+" Checklist", (a.exhibitionTitle||"No exhibition title")+" • "+(a.year||"No year"))}
+    <main class="report-content">${reportArtistLine(a)}</main>
     ${reportDocFooter()}
-  </div>`;
-}
-function buildExhibitionDetailsReport(a){
-  const d=dueDates(a);
-  const detail=(label,value)=>`<div class="ex-detail"><span>${esc(label)}</span><strong>${esc(value||"Not set")}</strong></div>`;
-  return `<div class="print-doc exhibition-details-doc">${reportDocHeader("Exhibition Details", (a.artistName||"Artist / Organization")+" • "+(a.year||""))}
-    <main class="report-content">
-      <article class="exhibition-details-sheet">
-        ${a.exhibitionBanner?.dataUrl?`<div class="ex-detail-banner"><img src="${a.exhibitionBanner.dataUrl}" alt=""></div>`:""}
-        <div class="ex-detail-heading"><span>Artist / Organization</span><h2>${esc(a.artistName||"Untitled")}</h2><p>${esc(a.exhibitionTitle||"No exhibition title")}</p></div>
-        <div class="ex-details-grid">
-          ${detail("Gallery",a.gallery)}
-          ${detail("Exhibition Opens",fmtDate(a.exhibitionStartDate))}
-          ${detail("Exhibition Closes",fmtDate(a.exhibitionEndDate))}
-          ${detail("Installation",fmtDate(a.installDate))}
-          ${detail("De-install / Pickup",fmtDate(a.deinstallDate))}
-          ${detail("Promotional Materials Due",fmtDate(d.promoDue))}
-          ${detail("Inventory Due",fmtDate(d.inventoryDue))}
-        </div>
-        <div class="ex-detail-note"><strong>Hammond Regional Arts Center</strong><p>This page contains exhibition scheduling details only. Materials and artist-document requirements are intentionally excluded.</p></div>
-      </article>
-    </main>${reportDocFooter()}
   </div>`;
 }
 
@@ -1009,6 +855,16 @@ function renderExhibitionsHub(){
         <div class="exhibition-tile-image">${a.exhibitionBanner?.dataUrl?`<img src="${a.exhibitionBanner.dataUrl}" alt="">`:a.promoImages?.[0]?.dataUrl?`<img src="${a.promoImages[0].dataUrl}" alt="">`:`<div class="tile-placeholder">HRAC<br>${esc(a.year||"")}</div>`}</div>
         <div class="exhibition-tile-body"><div class="tile-top"><span>${a.pinned?"📌 ":""}${a.favorite?"★ ":""}</span><span class="manager-status">${derived(a).percent}%</span></div><h3>${esc(a.exhibitionTitle||"Untitled Exhibition")}</h3><p>${esc(a.artistName||"Untitled Artist")}</p><small>${esc(a.gallery||"No gallery")} · ${fmtDate(a.exhibitionStartDate||a.installDate)}</small></div>
       </article>`).join("")}</div>`:`<div class="manager-empty">No active exhibitions are loaded yet.</div>`}`;
+}
+function renderScheduleHub(){
+  const events=allEvents(false);
+  const next=events.filter(e=>e.date>=todayISO()).slice(0,20);
+  document.getElementById("view-schedule").innerHTML=`
+    <div class="manager-page-head"><div><h1>Schedule</h1><p>One calendar for installs, de-installs, openings, and due dates.</p></div></div>
+    <div class="manager-two">
+      <div class="panel"><div class="panel-head"><div class="panel-title">Upcoming HRAC Dates</div></div><div class="panel-body">${next.length?next.map(e=>`<div class="manager-list-item"><div><strong>${esc(e.label)}</strong><div class="artist-show">${esc(e.sub)}</div></div><span class="manager-status">${fmtDate(e.date)}</span></div>`).join(""):`<div class="manager-empty">No upcoming dates.</div>`}</div></div>
+      <div class="manager-card"><h3>Calendar Snapshot</h3><div class="big">${next.length}</div><small>upcoming tracked dates</small><hr style="border:0;border-top:1px solid #e4e8ed;margin:18px 0"><button class="manager-btn secondary" data-tab="calendar">Open Detailed Calendar</button></div>
+    </div>`;
 }
 function renderContactsHub(){
   const contacts=sortArtists(state.artists).filter(a=>a.artistName||a.email||a.phone);
@@ -1454,48 +1310,16 @@ function renderProfileHub(){
     <div class="manager-two"><div class="manager-card profile-editor-card"><div class="profile-editor-avatar">${esc(initials)}</div><div><h3>${esc(name)}</h3><small>Current editor on this browser</small><p><strong>Session:</strong> ${esc(state.currentSessionId||"Not started")}</p></div></div>
     <div class="manager-card"><h3>Shared JSON Status</h3><p><strong>Loaded file:</strong> ${esc(state.loadedFileName||"None")}</p><p><strong>Last saved by:</strong> ${esc(state.lastSavedBy||"Not recorded")}</p><p><strong>Last saved:</strong> ${esc(state.lastSavedAt||"Not recorded")}</p><button class="manager-btn secondary" data-action="show-collab-notice">Review Collaboration Settings</button></div></div>`;
 }
-function reportArtistOptions(list){ return list.map(a=>`<option value="${esc(a.id)}">${esc((a.year||"")+" — "+(a.artistName||"Untitled Artist")+(isPastExhibition(a)?" (past)":""))}</option>`).join(""); }
-function renderReports(){
-  const y=activeYear(),working=sortArtists(activeOperationalArtists()),sorted=working.length?working:sortArtists(state.artists),hidden=archivedArtists().length;
-  const includeNotes=!!state.reportPreferences?.includeNotes;
-  document.getElementById("view-reports").innerHTML=`
-    <div class="hero"><h1>Reports & Documents</h1><p>Internal checklists, clean exhibition-detail sheets, and meeting-ready reports.</p></div>
-    <div class="report-card">
-      <div class="panel-title">☑ Year Checklist Report</div>
-      <div class="empty" style="margin-top:10px">Working reports hide finished exhibitions by default. ${hidden} past exhibition(s) are currently tucked away unless you include history / analysis.</div>
-      <div class="report-options">
-        <div class="field"><label>Year</label><select id="reportYear">${reportYearsOptions()}</select></div>
-        <div class="field"><label>Report Scope</label><select id="reportIncludePast"><option value="no">Working list only</option><option value="yes">Include history / analysis</option></select></div>
-        <label class="report-check"><input type="checkbox" id="reportYearNotes" ${includeNotes?"checked":""}><span>Include Notes / Follow Up</span></label>
-      </div>
-      <div class="report-toolbar" style="margin-top:16px"><button class="btn primary" data-action="preview-year-report">Preview Year Report</button><button class="btn" data-action="print-year-report">Print / Save PDF</button></div>
-      <div id="yearReportPreview" class="checklist-preview">${buildYearReport(y,false,includeNotes)}</div>
-    </div>
-    <div class="report-card">
-      <div class="panel-title">♙ Individual Artist Checklist</div>
-      <p class="artist-show">Choose whether HRAC's Notes / Follow Up field should travel with the internal checklist.</p>
-      <div class="report-options">
-        <div class="field"><label>Artist Scope</label><select id="reportArtistScope"><option value="working">Working artists only</option><option value="all">Include history / analysis</option></select></div>
-        <div class="field"><label>Artist</label><select id="reportArtist">${reportArtistOptions(sorted)}</select></div>
-        <label class="report-check"><input type="checkbox" id="reportArtistNotes" ${includeNotes?"checked":""}><span>Include Notes / Follow Up</span></label>
-      </div>
-      <div class="report-toolbar" style="margin-top:16px"><button class="btn primary" data-action="preview-artist-report">Preview Artist Report</button><button class="btn" data-action="print-selected-artist-report">Print / Save PDF</button></div>
-      <div id="artistReportPreview" class="checklist-preview">${sorted[0]?buildArtistReport(sorted[0],includeNotes):`<div class="empty">No artists loaded yet.</div>`}</div>
-    </div>
-    <div class="report-card exhibition-details-report-card">
-      <div class="panel-title">🎨 Exhibition Details Only</div>
-      <p class="artist-show">A clean artist-facing sheet with dates and exhibition logistics only—no Bio, Headshot, W-9, Materials Needed, or internal Notes.</p>
-      <div class="report-options"><div class="field"><label>Artist / Group / Organization</label><select id="reportExhibitionArtist">${reportArtistOptions(sortArtists(state.artists))}</select></div></div>
-      <div class="report-toolbar" style="margin-top:16px"><button class="btn primary" data-action="preview-exhibition-details">Preview Exhibition Details</button><button class="btn" data-action="print-exhibition-details-selected">Export / Save PDF</button></div>
-      <div id="exhibitionDetailsPreview" class="checklist-preview">${state.artists.length?buildExhibitionDetailsReport(sortArtists(state.artists)[0]):`<div class="empty">No exhibitions loaded yet.</div>`}</div>
-    </div>`;
+function renderReports(){ const y=activeYear(); const working=sortArtists(activeOperationalArtists()); const sorted=working.length ? working : sortArtists(state.artists); const hidden=archivedArtists().length; document.getElementById("view-reports").innerHTML = `<div class="hero"><h1>Printable Reports</h1><p>Clean HRAC checklists for staff meetings, folders, and follow-up days.</p></div><div class="report-card"><div class="panel-title">☑ Year Checklist Report</div><div class="empty" style="margin-top:10px">Working reports hide finished exhibitions by default. ${hidden} past exhibition(s) are currently tucked away unless you include history / analysis.</div><div class="report-options"><div class="field"><label>Year</label><select id="reportYear">${reportYearsOptions()}</select></div><div class="field"><label>Report Scope</label><select id="reportIncludePast"><option value="no">Working list only</option><option value="yes">Include history / analysis</option></select></div></div><div class="report-toolbar" style="margin-top:16px"><button class="btn primary" data-action="preview-year-report">Preview Year Report</button><button class="btn" data-action="print-year-report">Print Year Report</button></div><div id="yearReportPreview" class="checklist-preview">${buildYearReport(y,false)}</div></div><div class="report-card"><div class="panel-title">♙ Individual Artist Checklist</div><p class="artist-show">You can also print this directly from an artist profile using the Print Checklist button.</p><div class="report-options"><div class="field"><label>Artist Scope</label><select id="reportArtistScope"><option value="working">Working artists only</option><option value="all">Include history / analysis</option></select></div><div class="field"><label>Artist</label><select id="reportArtist">${sorted.map(a=>`<option value="${esc(a.id)}">${esc((a.year||"")+" — "+(a.artistName||"Untitled Artist")+(isPastExhibition(a)?" (past)":""))}</option>`).join("")}</select></div></div><div class="report-toolbar" style="margin-top:16px"><button class="btn primary" data-action="preview-artist-report">Preview Artist Report</button><button class="btn" data-action="print-selected-artist-report">Print Artist Report</button></div><div id="artistReportPreview" class="checklist-preview">${sorted[0]?buildArtistReport(sorted[0]):`<div class="empty">No artists loaded yet.</div>`}</div></div>`; }
+function refreshYearReportPreview(){ const year=document.getElementById("reportYear")?.value || activeYear(); const includePast=document.getElementById("reportIncludePast")?.value === "yes"; const box=document.getElementById("yearReportPreview"); if(box) box.innerHTML=buildYearReport(year, includePast); }
+function refreshArtistReportOptions(){
+  const scope=document.getElementById("reportArtistScope")?.value || "working";
+  const list=sortArtists(scope === "all" ? state.artists : activeOperationalArtists());
+  const select=document.getElementById("reportArtist");
+  if(select) select.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc((a.year||"")+" — "+(a.artistName||"Untitled Artist")+(isPastExhibition(a)?" (past)":""))}</option>`).join("");
+  refreshArtistReportPreview();
 }
-function rememberReportNotes(value){ state.reportPreferences=state.reportPreferences||{};state.reportPreferences.includeNotes=!!value;markDirty(); }
-function refreshYearReportPreview(){ const year=document.getElementById("reportYear")?.value||activeYear();const includePast=document.getElementById("reportIncludePast")?.value==="yes";const includeNotes=!!document.getElementById("reportYearNotes")?.checked;const box=document.getElementById("yearReportPreview");if(box)box.innerHTML=buildYearReport(year,includePast,includeNotes); }
-function refreshArtistReportOptions(){ const scope=document.getElementById("reportArtistScope")?.value||"working";const list=sortArtists(scope==="all"?state.artists:activeOperationalArtists());const select=document.getElementById("reportArtist");if(select)select.innerHTML=reportArtistOptions(list);refreshArtistReportPreview(); }
-function refreshArtistReportPreview(){ const id=document.getElementById("reportArtist")?.value;const scope=document.getElementById("reportArtistScope")?.value||"working";const fallback=sortArtists(scope==="all"?state.artists:activeOperationalArtists())[0];const a=state.artists.find(x=>x.id===id)||fallback;const includeNotes=!!document.getElementById("reportArtistNotes")?.checked;const box=document.getElementById("artistReportPreview");if(box)box.innerHTML=a?buildArtistReport(a,includeNotes):`<div class="empty">No artist selected.</div>`; }
-function refreshExhibitionDetailsPreview(){const id=document.getElementById("reportExhibitionArtist")?.value;const a=state.artists.find(x=>x.id===id)||sortArtists(state.artists)[0];const box=document.getElementById("exhibitionDetailsPreview");if(box)box.innerHTML=a?buildExhibitionDetailsReport(a):`<div class="empty">No exhibition selected.</div>`;}
-
+function refreshArtistReportPreview(){ const id=document.getElementById("reportArtist")?.value; const scope=document.getElementById("reportArtistScope")?.value || "working"; const fallback=sortArtists(scope === "all" ? state.artists : activeOperationalArtists())[0]; const a=state.artists.find(x=>x.id===id) || fallback; const box=document.getElementById("artistReportPreview"); if(box) box.innerHTML=a ? buildArtistReport(a) : `<div class="empty">No artist selected.</div>`; }
 function printHtml(html){
   const w=window.open("","_blank");
   if(!w){ alert("Pop-up blocked. Please allow pop-ups to print reports."); return; }
@@ -1504,7 +1328,7 @@ function printHtml(html){
 .print-head{display:grid;grid-template-columns:1fr minmax(260px,1.15fr);gap:24px;align-items:end;border-bottom:4px solid var(--report-navy);padding-bottom:18px;margin-bottom:22px}
 .report-brand-block{align-self:start}.print-brand{font-family:Georgia,"Times New Roman",serif;font-size:40px;line-height:.95;letter-spacing:.12em;color:var(--report-navy);font-weight:700}.print-sub{margin-top:8px;font-size:11px;font-weight:950;color:var(--report-blue);letter-spacing:.12em}.report-title-block{text-align:right}.print-title{margin:0;color:var(--report-navy);font-size:25px;line-height:1.15;font-weight:950}.print-meta{margin-top:8px;color:var(--report-muted);font-size:11px;font-weight:700;line-height:1.55}.report-content{display:grid;gap:16px}
 .print-artist{border:1px solid var(--report-line);border-radius:16px;padding:18px;background:#fff;break-inside:avoid;page-break-inside:avoid}.report-artist-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.print-artist h3{margin:0;color:var(--report-navy);font-size:21px;line-height:1.15}.print-artist p{margin:5px 0 0;font-size:14px;font-weight:850}.report-artist-meta{margin-top:4px;font-size:11px;color:var(--report-muted);font-weight:750}.report-progress{min-width:82px;border:1px solid var(--report-line);border-radius:14px;background:var(--report-soft);padding:9px 12px;text-align:center}.report-progress strong{display:block;font-size:21px;color:var(--report-navy);line-height:1}.report-progress span{display:block;margin-top:4px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--report-muted);font-weight:900}.report-progress-bar{height:7px;border-radius:999px;background:#e8eef6;overflow:hidden;margin:14px 0 16px}.report-progress-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--report-blue),#23a36b)}
-.print-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px}.report-task{display:grid;grid-template-columns:20px 1fr;gap:8px;align-items:start;min-height:34px}.report-task-box{width:18px;height:18px;border:2px solid var(--report-navy);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;line-height:1}.report-task.is-done .report-task-box{border-color:var(--report-green);background:#e7f7ef;color:var(--report-green)}.report-task-copy strong{display:block;font-size:12px;line-height:1.2}.report-task-copy small{display:block;margin-top:3px;color:var(--report-muted);font-size:10px;font-weight:750}.report-summary{margin-top:16px;border-top:1px solid var(--report-line);padding-top:12px;display:grid;gap:3px}.report-summary strong{font-size:12px}.report-summary span{font-size:10px;color:var(--report-muted)}.report-summary.has-missing strong{color:var(--report-red)}.report-summary.is-complete strong{color:var(--report-green)}.print-footer{margin-top:18px;padding-top:10px;border-top:1px solid var(--report-line);display:flex;justify-content:space-between;gap:16px;color:var(--report-muted);font-size:9px;font-weight:750}.report-empty{border:1px dashed var(--report-line);border-radius:12px;padding:18px;color:var(--report-muted);font-weight:800}.past-muted{opacity:.68}.report-notes{margin-top:14px;padding:12px 14px;border-radius:10px;background:#f6f9fd;border-left:4px solid var(--report-blue)}.report-notes strong{display:block;color:var(--report-navy);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.report-notes p{margin:5px 0 0!important;font-size:11px!important;font-weight:500!important;white-space:normal}.report-notes.empty-note{opacity:.65}.exhibition-details-sheet{border:1px solid var(--report-line);border-radius:16px;overflow:hidden}.ex-detail-banner{height:150px;overflow:hidden}.ex-detail-banner img{width:100%;height:100%;object-fit:cover}.ex-detail-heading{padding:22px 22px 14px}.ex-detail-heading span,.ex-detail span{display:block;text-transform:uppercase;letter-spacing:.07em;font-size:9px;font-weight:900;color:var(--report-muted)}.ex-detail-heading h2{font-family:Georgia,serif;color:var(--report-navy);font-size:28px;margin:4px 0}.ex-detail-heading p{margin:0;font-size:16px;font-weight:800}.ex-details-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--report-line)}.ex-detail{padding:15px 18px;border-right:1px solid var(--report-line);border-bottom:1px solid var(--report-line)}.ex-detail:nth-child(even){border-right:0}.ex-detail strong{display:block;margin-top:4px;color:var(--report-navy);font-size:13px}.ex-detail-note{padding:16px 20px;background:var(--report-soft)}.ex-detail-note p{margin:4px 0 0!important;font-size:10px!important;font-weight:500!important;color:var(--report-muted)}
+.print-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px}.report-task{display:grid;grid-template-columns:20px 1fr;gap:8px;align-items:start;min-height:34px}.report-task-box{width:18px;height:18px;border:2px solid var(--report-navy);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;line-height:1}.report-task.is-done .report-task-box{border-color:var(--report-green);background:#e7f7ef;color:var(--report-green)}.report-task-copy strong{display:block;font-size:12px;line-height:1.2}.report-task-copy small{display:block;margin-top:3px;color:var(--report-muted);font-size:10px;font-weight:750}.report-summary{margin-top:16px;border-top:1px solid var(--report-line);padding-top:12px;display:grid;gap:3px}.report-summary strong{font-size:12px}.report-summary span{font-size:10px;color:var(--report-muted)}.report-summary.has-missing strong{color:var(--report-red)}.report-summary.is-complete strong{color:var(--report-green)}.print-footer{margin-top:18px;padding-top:10px;border-top:1px solid var(--report-line);display:flex;justify-content:space-between;gap:16px;color:var(--report-muted);font-size:9px;font-weight:750}.report-empty{border:1px dashed var(--report-line);border-radius:12px;padding:18px;color:var(--report-muted);font-weight:800}.past-muted{opacity:.68}
 .checklist-preview .print-doc{padding:8px;max-width:none}.checklist-preview .print-head{grid-template-columns:1fr 1fr}.checklist-preview .print-footer{position:static}
 @media(max-width:720px){.print-head{grid-template-columns:1fr}.report-title-block{text-align:left}.print-grid{grid-template-columns:1fr}.report-artist-heading{flex-direction:column}.report-progress{align-self:flex-start}.print-footer{flex-direction:column}}
 @media print{html,body{margin:0!important;padding:0!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-size:11pt}.print-doc{max-width:none;padding:0!important}.print-head{break-after:avoid;page-break-after:avoid}.print-artist{box-shadow:none}.report-progress-bar span,.report-task.is-done .report-task-box{print-color-adjust:exact;-webkit-print-color-adjust:exact}.print-footer{position:fixed;left:0;right:0;bottom:0;background:#fff}.report-content{padding-bottom:.35in}@page{size:letter portrait;margin:.45in .5in .55in}}
@@ -1751,9 +1575,6 @@ document.addEventListener("click", e=>{
     return;
   }
 
-  const calendarOpen=e.target.closest("[data-calendar-open]");
-  if(calendarOpen){ openCalendarSource(calendarOpen.dataset.calendarSource,calendarOpen.dataset.calendarOpen); return; }
-
   const unifiedOpen=e.target.closest("[data-unified-open]");
   if(unifiedOpen){ state.selectedUnifiedId=unifiedOpen.dataset.unifiedOpen; state.selectedUnifiedType=unifiedOpen.dataset.unifiedType; render(); showTab(state.selectedUnifiedType,false); window.scrollTo({top:0,behavior:"smooth"}); return; }
 
@@ -1817,14 +1638,6 @@ document.addEventListener("input", e=>{
   if(e.target.id==="globalSearch") globalSearch(e.target.value);
 });
 document.addEventListener("change", e=>{
-  if(e.target.matches("[data-calendar-filter]")){
-    state.calendarPreferences.filters[e.target.dataset.calendarFilter]=e.target.checked;markDirty();refreshCalendarWorkspace();return;
-  }
-  if(e.target.id==="calendarIncludePast"){state.calendarPreferences.includeHistory=e.target.checked;markDirty();refreshCalendarWorkspace();return;}
-  if(e.target.id==="reportYearNotes"){rememberReportNotes(e.target.checked);refreshYearReportPreview();return;}
-  if(e.target.id==="reportArtistNotes"){rememberReportNotes(e.target.checked);refreshArtistReportPreview();return;}
-  if(e.target.id==="reportExhibitionArtist"){refreshExhibitionDetailsPreview();return;}
-
   if(e.target.matches("[data-unified-field]")){ if(readOnlyMode)return; const item=unifiedList(e.target.dataset.unifiedType).find(x=>x.id===e.target.dataset.unifiedId); if(item){item[e.target.dataset.unifiedField]=e.target.type==="number"?Number(e.target.value)||0:e.target.value;markDirty();render();showTab(e.target.dataset.unifiedType,false);}return;}
   if(e.target.matches("[data-unified-image-upload]")){const item=unifiedList(e.target.dataset.unifiedImageType).find(x=>x.id===e.target.dataset.unifiedImageUpload);if(item){[...e.target.files].forEach(file=>{if(!file.type.startsWith("image/"))return;const reader=new FileReader();reader.onload=()=>{item.profileImages=item.profileImages||[];item.profileImages.push({name:file.name,type:file.type,size:file.size,dataUrl:reader.result,uploaded:todayISO()});markDirty();render();showTab(e.target.dataset.unifiedImageType,false);};reader.readAsDataURL(file);});}e.target.value="";return;}
   if(e.target.matches("[data-education-image-upload]")){
@@ -1847,6 +1660,7 @@ document.addEventListener("change", e=>{
   if(e.target.id==="reportYear" || e.target.id==="reportIncludePast") refreshYearReportPreview();
   if(e.target.id==="reportArtist") refreshArtistReportPreview();
   if(e.target.id==="reportArtistScope") refreshArtistReportOptions();
+  if(e.target.id==="calendarIncludePast") refreshCalendarList();
 });
 document.addEventListener("dragstart", e=>{
   const row=e.target.closest("[data-artist-id]");
@@ -1925,47 +1739,20 @@ function doAction(btn){
     alert(d.passed ? "Self-check complete: GO. If no artist data is loaded, upload the latest JSON backup." : "Self-check complete: NO-GO. Review the failed items on the Test page.");
     renderTesting();
   }
-  if(act==="calendar-prev"){calendarMonthDate(-1);markDirty();refreshCalendarWorkspace();return;}
-  if(act==="calendar-next"){calendarMonthDate(1);markDirty();refreshCalendarWorkspace();return;}
-  if(act==="calendar-today"){state.calendarPreferences.month=todayISO().slice(0,7);markDirty();refreshCalendarWorkspace();return;}
-  if(act==="calendar-view-month"){state.calendarPreferences.view="month";markDirty();refreshCalendarWorkspace();return;}
-  if(act==="calendar-view-upcoming"){state.calendarPreferences.view="upcoming";markDirty();refreshCalendarWorkspace();return;}
-  if(act==="calendar-day-agenda"){
-    const date=btn.dataset.date;const items=visibleCalendarEvents().filter(e=>e.date===date);
-    alert(fmtDate(date)+"\n\n"+items.map(e=>"• "+e.label+(e.sub?" — "+e.sub:"")).join("\n"));return;
-  }
-  if(act==="add-calendar-event"){
-    if(readOnlyMode){alert("Read-only mode is on. Start Editing before adding calendar events.");return;}
-    const title=prompt("HRAC event title:","");if(!title)return;
-    const date=prompt("Date (YYYY-MM-DD):",todayISO());if(!date)return;
-    const time=prompt("Time (optional):","")||"";
-    const location=prompt("Location (optional):","HRAC")||"";
-    const notes=prompt("Notes (optional):","")||"";
-    state.customCalendarEvents.push({id:uid(),title:title.trim(),date:date.trim(),time:time.trim(),location:location.trim(),notes:notes.trim()});
-    state.calendarPreferences.month=date.trim().slice(0,7)||state.calendarPreferences.month;logActivity("Added calendar event",title.trim());markDirty();refreshCalendarWorkspace();return;
-  }
   if(act==="preview-year-report"){ refreshYearReportPreview(); }
   if(act==="print-year-report"){
     const year=document.getElementById("reportYear")?.value || activeYear();
     const includePast=document.getElementById("reportIncludePast")?.value === "yes";
-    const includeNotes=!!document.getElementById("reportYearNotes")?.checked;
-    logActivity("Printed year checklist", year + (includePast ? " with history" : " working list") + (includeNotes?" + notes":""));
-    printHtml(buildYearReport(year, includePast, includeNotes));
+    logActivity("Printed year checklist", year + (includePast ? " with history" : " working list"));
+    printHtml(buildYearReport(year, includePast));
   }
   if(act==="preview-artist-report"){ refreshArtistReportPreview(); }
   if(act==="print-selected-artist-report"){
     const id=document.getElementById("reportArtist")?.value;
     const artist=state.artists.find(x=>x.id===id) || sortArtists(state.artists)[0];
-    const includeNotes=!!document.getElementById("reportArtistNotes")?.checked;
-    if(artist){ logActivity("Printed artist checklist", artist.artistName || "Untitled"); printHtml(buildArtistReport(artist,includeNotes)); }
+    if(artist){ logActivity("Printed artist checklist", artist.artistName || "Untitled"); printHtml(buildArtistReport(artist)); }
   }
-  if(act==="preview-exhibition-details"){refreshExhibitionDetailsPreview();}
-  if(act==="print-exhibition-details-selected"){
-    const id=document.getElementById("reportExhibitionArtist")?.value;const artist=state.artists.find(x=>x.id===id)||sortArtists(state.artists)[0];
-    if(artist){logActivity("Exported exhibition details",artist.artistName||"Untitled");printHtml(buildExhibitionDetailsReport(artist));}
-  }
-  if(act==="print-exhibition-details" && a){logActivity("Exported exhibition details",a.artistName||"Untitled");printHtml(buildExhibitionDetailsReport(a));}
-  if(act==="print-artist-checklist" && a){ const includeNotes=!!(a.notes&&String(a.notes).trim()) && confirm("Include Notes / Follow Up in this checklist?"); logActivity("Printed artist checklist", a.artistName || "Untitled"); printHtml(buildArtistReport(a,includeNotes)); }
+  if(act==="print-artist-checklist" && a){ logActivity("Printed artist checklist", a.artistName || "Untitled"); printHtml(buildArtistReport(a)); }
 
   if(act==="show-missing"){ showMissingFocus(btn.dataset.kind); }
   if(act==="clear-activity-log"){ if(confirm("Clear the visible activity log for this JSON file?")){ state.activityLog=[]; markDirty(); render(); } }

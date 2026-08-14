@@ -57,6 +57,27 @@
 </div>
 
 
+
+<script>
+(function () {
+  function releaseLoadingScreen() {
+    var screen = document.getElementById('loadingScreen');
+    var shell = document.getElementById('appShell');
+    if (screen) {
+      screen.style.opacity = '0';
+      screen.style.pointerEvents = 'none';
+      setTimeout(function(){ screen.style.display = 'none'; }, 250);
+    }
+    if (shell) shell.removeAttribute('aria-hidden');
+  }
+  window.__hracReleaseLoadingScreen = releaseLoadingScreen;
+  window.addEventListener('load', function () {
+    setTimeout(releaseLoadingScreen, 1800);
+  });
+  setTimeout(releaseLoadingScreen, 4500);
+})();
+</script>
+
 <script src="js/app.js" defer></script>
 </body>
 </html>
